@@ -7,13 +7,28 @@ app.use(express.json());
 app.use(cors());
 const PORT = process.env.PORT || 3000;
 
-// Get lat/lon from Nominatim
+// Get lat/lon from Nominatim mirror with timeout
 async function getLatLong(location) {
-  const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(location)}`;
-  const res = await fetch(url);
-  const data = await res.json();
-  if (data.length === 0) return null;
-  return { lat: data[0].lat, lon: data[0].lon };
+  const url = `https://nominatim.openstreetmap.fr/search?format=json&q=${encodeURIComponent(location)}`;
+  
+  // Timeout wrapper for fetch
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10000); // 10 sec timeout
+
+  try {
+    const res = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeout);
+
+    if (!res.ok) throw new Error(`Nominatim responded with status ${res.status}`);
+
+    const data = await res.json();
+    if (data.length === 0) return null;
+    return { lat: data[0].lat, lon: data[0].lon };
+  } catch (error) {
+    clearTimeout(timeout);
+    console.error('Error fetching lat/lon from Nominatim:', error.message);
+    throw error;
+  }
 }
 
 // Multiple Overpass endpoints for fallback
@@ -44,6 +59,11 @@ async function getMedicalStores(lat, lon) {
         body: query,
         headers: { 'Content-Type': 'text/plain' },
       });
+
+      if (!res.ok) {
+        console.warn(`Overpass endpoint ${endpoint} responded with status ${res.status}`);
+        continue;
+      }
 
       const text = await res.text();
       let data;
@@ -76,7 +96,6 @@ async function getMedicalStores(lat, lon) {
 app.get("/", (req, res) => {
   res.send("MediQuery backend running");
 });
-
 
 // API Route
 app.post('/api/medical-stores', async (req, res) => {
