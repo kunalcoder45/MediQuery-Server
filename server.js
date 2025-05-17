@@ -5,7 +5,7 @@ import cors from 'cors';
 const app = express();
 app.use(express.json());
 app.use(cors());
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 // Get lat/lon from Nominatim
 async function getLatLong(location) {
@@ -72,6 +72,11 @@ async function getMedicalStores(lat, lon) {
   // If all endpoints fail
   return [];
 }
+
+app.get("/", (req, res) => {
+  res.send("MediQuery backend running");
+});
+
 
 // API Route
 app.post('/api/medical-stores', async (req, res) => {
